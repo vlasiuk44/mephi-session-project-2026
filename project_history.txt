@@ -1,0 +1,33 @@
+sudo nmcli con mod enp0s3 ipv4.method manual ipv4.addresses 192.168.1.100/24 ipv4.gateway 192.168.1.1 ipv4.dns 8.8.8.8
+sudo hostnamectl set-hostname mephi-2026.domain.local
+ping -c 4 192.168.1.1 > ~/network_check.txt
+ping -c 4 8.8.8.8 >> ~/network_check.txt
+sudo dnf install -y nginx tcpdump libcap-ng-utils dnf-plugins-core policycoreutils-python-utils
+sudo dnf download --destdir /tmp tcpdump
+sudo rpm -Uvh --replacepkgs /tmp/tcpdump-*.rpm
+sudo parted -s /dev/sdb mklabel gpt
+sudo parted -s /dev/sdb mkpart primary ext4 0% 100%
+sudo mkfs.ext4 -L MEPHI_DATA /dev/sdb1
+sudo mkdir -p /data/mephi-web
+echo "LABEL=MEPHI_DATA /data/mephi-web ext4 defaults 0 2" | sudo tee -a /etc/fstab
+sudo mount -a
+sudo systemctl enable --now nginx
+sudo journalctl -u nginx --since "5 minutes ago" > ~/nginx_recent_logs.txt
+sudo groupadd mephi-devs
+sudo useradd -m -G mephi-devs mephi-admin
+echo "mephi-admin:P@ssw0rd2026" | sudo chpasswd
+sudo chown mephi-admin:mephi-devs /data/mephi-web
+sudo chmod 2775 /data/mephi-web
+sudo setenforce 1
+sudo semanage fcontext -a -t httpd_sys_content_t "/data/mephi-web(/.*)?"
+sudo restorecon -Rv /data/mephi-web
+sudo setcap cap_net_raw,cap_net_admin+ep /usr/sbin/tcpdump
+sudo -u mephi-admin tcpdump --help
+echo root | sudo tee /etc/ssh/denied_users
+sudo sed -i '1iauth required pam_listfile.so item=user sense=deny file=/etc/ssh/denied_users onerr=succeed' /etc/pam.d/login
+sudo sed -i '1iauth required pam_listfile.so item=user sense=deny file=/etc/ssh/denied_users onerr=succeed' /etc/pam.d/sshd
+echo "PermitRootLogin no" | sudo tee -a /etc/ssh/sshd_config
+sudo systemctl restart sshd
+sudo -u mephi-admin bash -lc 'echo "Hello from Student: M255940" > /data/mephi-web/index.html'
+curl -s http://192.168.1.100 > ~/curl_output.txt
+history > ~/project_history.txt
